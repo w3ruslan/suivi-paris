@@ -6,14 +6,15 @@
 <title>Paris · Match nul</title>
 <style>
   :root{
-    --bg:#f3f5f8; --card:#ffffff; --soft:#f6f8fb; --line:#e9edf3;
-    --ink:#3a424f; --muted:#98a1b2; --accent:#6d86f0; --accent-soft:#eef2fe;
-    --green:#2f9e70; --green-soft:#e9f6ef; --red:#df6274; --red-soft:#fdeef0;
-    --amber:#c98a3a; --amber-soft:#fdf3e5;
+    --bg:#0f1420; --card:#1a2233; --soft:#131a29; --line:#2a3550;
+    --ink:#eaf0fb; --muted:#94a2bd; --accent:#6d86f0; --accent-soft:rgba(109,134,240,.16);
+    --green:#22c55e; --green-soft:rgba(34,197,94,.13); --red:#ef4444; --red-soft:rgba(239,68,68,.13);
+    --amber:#f59e0b; --amber-soft:rgba(245,158,11,.14);
   }
   *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
   body{margin:0;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;
-    background:var(--bg);color:var(--ink);padding:18px;max-width:460px;margin:0 auto;line-height:1.4}
+    background:radial-gradient(1000px 500px at 50% -220px,rgba(109,134,240,.22),transparent),var(--bg);
+    color:var(--ink);padding:18px;max-width:460px;margin:0 auto;min-height:100vh;line-height:1.4}
   .header{text-align:center;margin-bottom:16px}
   .header h1{font-size:19px;font-weight:600;margin:0}
   .header .sub{font-size:13px;color:var(--muted);margin-top:3px}
@@ -42,8 +43,8 @@
   .grid2{display:flex;gap:10px}
   label.f{flex:1;min-width:0;display:flex;flex-direction:column;gap:6px;font-size:12px;color:var(--muted);font-weight:500;margin-bottom:12px}
   input{background:var(--soft);border:1px solid var(--line);color:var(--ink);border-radius:12px;padding:13px;font-size:16px;width:100%;min-width:0;font-family:inherit}
-  input::placeholder{color:#b3bccb}
-  input:focus{outline:none;border-color:var(--accent);background:#fff}
+  input::placeholder{color:#5b6885}
+  input:focus{outline:none;border-color:var(--accent)}
   .vs{display:flex;align-items:flex-end;justify-content:center;color:var(--muted);font-weight:600;font-size:13px;padding-bottom:12px}
 
   .hintlbl{font-size:11px;color:var(--muted);display:flex;gap:12px;margin:2px 2px 8px}
@@ -52,11 +53,11 @@
   .ck{flex:0 0 52px;background:var(--soft);border:1px solid var(--line);color:var(--ink);font-weight:600;text-align:center;border-radius:10px;padding:12px 0;font-size:14px}
   .calc-row input{flex:1}
   .cs{flex:0 0 96px;text-align:right;font-weight:700;color:var(--green);font-size:15px;white-space:nowrap}
-  .cs.off{color:#c8cfda;font-weight:500}
+  .cs.off{color:#5b6885;font-weight:500}
 
-  .warn{background:var(--red-soft);border:1px solid #f2c2c9;color:var(--red);border-radius:12px;padding:11px 13px;font-size:12.5px;margin-bottom:12px;display:none}
+  .warn{background:var(--red-soft);border:1px solid rgba(239,68,68,.4);color:#ff8b8b;border-radius:12px;padding:11px 13px;font-size:12.5px;margin-bottom:12px;display:none}
 
-  .result{background:var(--green-soft);border:1px solid #cdeeda;border-radius:14px;padding:2px 16px;margin-bottom:14px}
+  .result{background:var(--green-soft);border:1px solid rgba(34,197,94,.3);border-radius:14px;padding:2px 16px;margin-bottom:14px}
   .rrow{display:flex;justify-content:space-between;align-items:center;padding:13px 0;border-bottom:1px solid rgba(47,158,112,.16)}
   .rrow:last-child{border-bottom:none}
   .rlbl{font-size:13.5px;color:var(--ink);font-weight:500}
@@ -70,7 +71,7 @@
   .btn-full{width:100%;margin-top:8px}
 
   .bets{list-style:none;padding:0;margin:0}
-  .bet{background:#fff;border:1px solid var(--line);border-radius:16px;padding:14px;margin-bottom:10px;box-shadow:0 1px 5px rgba(20,30,60,.03)}
+  .bet{background:var(--soft);border:1px solid var(--line);border-radius:16px;padding:14px;margin-bottom:10px;box-shadow:0 1px 5px rgba(20,30,60,.03)}
   .bet.win{border-left:3px solid var(--green)} .bet.loss{border-left:3px solid var(--red)} .bet.pending{border-left:3px solid var(--amber)}
   .row1{display:flex;justify-content:space-between;align-items:flex-start;gap:8px}
   .match{font-weight:600;font-size:15px}
@@ -80,7 +81,7 @@
   .actions{display:flex;gap:8px;margin-top:12px}
   .actions button{flex:1;padding:10px;font-size:14px}
   .tag{font-size:10.5px;padding:3px 9px;border-radius:7px;font-weight:600}
-  .tag.win{background:var(--green-soft);color:var(--green)} .tag.loss{background:var(--red-soft);color:var(--red)} .tag.pending{background:var(--amber-soft);color:var(--amber)}
+  .tag.win{background:var(--green-soft);color:var(--green)} .tag.loss{background:var(--red-soft);color:#ff8b8b} .tag.pending{background:var(--amber-soft);color:var(--amber)}
   .del{background:none;border:none;color:var(--muted);font-size:12.5px;cursor:pointer;padding:4px}
   .empty{color:var(--muted);text-align:center;padding:22px;font-size:14px}
   .divider{height:1px;background:var(--line);margin:16px 0}
@@ -93,7 +94,7 @@
   .foot{color:var(--muted);font-size:11px;text-align:center;margin-top:6px;line-height:1.5}
   .admin{display:none} .admin.show{display:block}
 
-  .overlay{position:fixed;inset:0;background:rgba(58,66,79,.35);backdrop-filter:blur(4px);display:none;align-items:center;justify-content:center;z-index:50}
+  .overlay{position:fixed;inset:0;background:rgba(6,9,16,.66);backdrop-filter:blur(4px);display:none;align-items:center;justify-content:center;z-index:50}
   .overlay.show{display:flex}
   .pinbox{background:var(--card);border-radius:24px;padding:26px 22px;width:320px;text-align:center;box-shadow:0 20px 50px rgba(20,30,60,.2)}
   .pinbox h3{font-weight:600;margin:0 0 6px}
@@ -104,7 +105,7 @@
   .dot.error{border-color:var(--red);background:var(--red)}
   .pad{display:grid;grid-template-columns:repeat(3,1fr);gap:16px;justify-items:center}
   .key{width:66px;height:66px;border-radius:50%;background:var(--soft);color:var(--ink);font-size:26px;font-weight:500;display:flex;align-items:center;justify-content:center;cursor:pointer;border:1px solid var(--line)}
-  .key:active{background:#eef1f6}
+  .key:active{background:#1f2740}
   .key.fn{font-size:14px;background:none;border:none;color:var(--accent);font-weight:600}
 </style>
 </head>
