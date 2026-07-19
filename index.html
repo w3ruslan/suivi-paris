@@ -19,11 +19,14 @@
   .header h1{font-size:19px;font-weight:600;margin:0}
   .header .sub{font-size:13px;color:var(--muted);margin-top:3px}
 
-  .leagues-bar{display:flex;gap:8px;overflow-x:auto;padding-bottom:12px;-webkit-overflow-scrolling:touch}
-  .leagues-bar::-webkit-scrollbar{display:none}
-  .pill{flex:0 0 auto;background:var(--card);border:1px solid var(--line);color:var(--muted);border-radius:999px;padding:9px 15px;font-size:13.5px;font-weight:600;cursor:pointer;white-space:nowrap}
-  .pill.active{background:var(--accent);color:#fff;border-color:var(--accent)}
-  .pill.add{color:var(--accent);background:var(--accent-soft);border-color:transparent}
+  .leagues-bar{display:grid;grid-template-columns:repeat(auto-fill,minmax(112px,1fr));gap:8px;margin-bottom:14px}
+  .pill{background:var(--card);border:1px solid var(--line);border-radius:13px;padding:8px 8px;cursor:pointer;text-align:center}
+  .pill .pn{display:block;font-size:11.5px;font-weight:700;line-height:1.15;color:var(--ink)}
+  .pill .pnet{display:block;font-size:12px;font-weight:800;margin-top:3px;color:var(--muted)}
+  .pill .pnet.pos{color:var(--green)} .pill .pnet.neg{color:#ff8b8b}
+  .pill.active{background:var(--accent);border-color:var(--accent)}
+  .pill.active .pn,.pill.active .pnet{color:#fff}
+  .pill.add{color:var(--accent);background:var(--accent-soft);border-color:transparent;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:13px}
 
   .hero{background:var(--card);border:1px solid var(--line);border-radius:22px;padding:22px;text-align:center;margin-bottom:12px;box-shadow:0 2px 14px rgba(20,30,60,.05)}
   .hero .lbl{font-size:13px;color:var(--muted)}
@@ -114,6 +117,7 @@
 <div class="header">
   <h1>Paris · Match nul</h1>
   <div class="sub" id="jeuTitle">Multi-ligues</div>
+  <div class="sub" id="syncBadge" style="font-size:11px;margin-top:2px"></div>
 </div>
 
 <div class="leagues-bar" id="leaguesBar"></div>
@@ -200,11 +204,48 @@
 
 <script>
 const ADMIN_PIN="210919", LS_KEY="suiviParisData";
-let data = JSON.parse(localStorage.getItem(LS_KEY)||"null") || { leagues:[] };
+const DEFAULT_LEAGUES=[
+ {id:"lg_ro",name:"ROMANIA",budget:0,target:100},{id:"lg_es",name:"LA LIGA",budget:0,target:50},
+ {id:"lg_es2",name:"LA LIGA2",budget:0,target:50},{id:"lg_it",name:"SERIE A",budget:0,target:50},
+ {id:"lg_pt",name:"PORTUGAL",budget:0,target:50},{id:"lg_az",name:"AZERBAIJAN",budget:0,target:50},
+ {id:"lg_pl",name:"POLAND",budget:0,target:50},{id:"lg_be",name:"BELCIKA",budget:0,target:50},
+ {id:"lg_hr",name:"CROATIA",budget:0,target:50}
+];
+let data = JSON.parse(localStorage.getItem(LS_KEY)||"null") || { leagues: DEFAULT_LEAGUES.map(l=>({...l,bets:[]})) };
 if(!Array.isArray(data.leagues)) data.leagues=[];
 let selLeague = localStorage.getItem("selLeague") || (data.leagues[0]&&data.leagues[0].id) || null;
 
-function save(){ localStorage.setItem(LS_KEY, JSON.stringify(data)); }
+// ---- SYNCHRONISATION (Cloudflare Worker) ----
+const WORKER_URL="https://paris-sport-data.w3ruslan-8c5.workers.dev";
+let syncTimer=null;
+function saveLocal(){ localStorage.setItem(LS_KEY, JSON.stringify(data)); }
+function save(){ saveLocal(); localStorage.setItem('pendingParisSport','1'); scheduleSync(); }
+function setSync(t){ const e=document.getElementById('syncBadge'); if(e) e.textContent=t; }
+async function pullData(){
+  setSync('⏳ Chargement…');
+  try{
+    const r=await fetch(WORKER_URL+"?t="+Date.now(),{cache:'no-store'});
+    if(!r.ok) throw new Error('HTTP '+r.status);
+    const cloud=await r.json();
+    const cl=Array.isArray(cloud.leagues)?cloud.leagues:[];
+    const pending=localStorage.getItem('pendingParisSport')==='1';
+    if(pending){ await pushData(); return; }
+    if(cl.length===0 && data.leagues.length>0){ await pushData(); return; }
+    data={leagues:cl};
+    if(!data.leagues.some(l=>l.id===selLeague)) selLeague=(data.leagues[0]&&data.leagues[0].id)||null;
+    saveLocal(); render();
+    setSync('☁️ Synchronisé');
+  }catch(e){ setSync('👁️ Hors ligne'); }
+}
+function scheduleSync(){ setSync('✎ Enregistrement…'); clearTimeout(syncTimer); syncTimer=setTimeout(pushData,900); }
+async function pushData(){
+  setSync('⏳ Enregistrement…');
+  try{
+    const r=await fetch(WORKER_URL,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(data)});
+    if(!r.ok) throw new Error('HTTP '+r.status);
+    localStorage.removeItem('pendingParisSport'); setSync('☁️ Synchronisé');
+  }catch(e){ setSync('⚠️ '+e.message); }
+}
 function fmt(n){ return Number(n).toFixed(2).replace(/\./,',').replace(/,00$/,'').replace(/(,\d)0$/,'$1'); }
 function money(n){ return (n>0?'+':'')+fmt(n)+' €'; }
 function todayDate(){ const d=new Date(); return String(d.getDate()).padStart(2,'0')+'/'+String(d.getMonth()+1).padStart(2,'0')+'/'+String(d.getFullYear()).slice(2); }
@@ -291,8 +332,12 @@ function clearLeague(){ openPin({type:'clearLeague'}); }
 // ---- RENDER ----
 function render(){
   const bar=document.getElementById('leaguesBar');
-  bar.innerHTML = data.leagues.map(l=>`<div class="pill ${l.id===selLeague?'active':''}" onclick="selectLeague('${l.id}')">${l.name}</div>`).join('')
-    + `<div class="pill add" onclick="openPin({type:'admin'})">+ Ligue</div>`;
+  bar.innerHTML = data.leagues.map(l=>{
+    const st=l.bets.filter(b=>b.result!=='pending');
+    const net=st.reduce((s,b)=>s+betProfit(b),0);
+    const cls=net>0?'pos':(net<0?'neg':'');
+    return `<div class="pill ${l.id===selLeague?'active':''}" onclick="selectLeague('${l.id}')"><span class="pn">${l.name}</span><span class="pnet ${cls}">${money(net)}</span></div>`;
+  }).join('') + `<div class="pill add" onclick="openPin({type:'admin'})">+ Ligue</div>`;
 
   const L=getLeague(), np=document.getElementById('netProfit');
   if(!L){
@@ -374,6 +419,8 @@ function checkPin(){
 }
 
 render();
+pullData();
+document.addEventListener('visibilitychange',()=>{ if(!document.hidden) pullData(); });
 </script>
 </body>
 </html>
