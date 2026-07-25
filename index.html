@@ -71,13 +71,6 @@
   button:active{opacity:.85}
   .btn-primary{background:var(--accent)} .btn-green{background:var(--green)} .btn-red{background:var(--red)}
   .btn-soft{background:var(--soft);color:var(--ink);border:1px solid var(--line)}
-  .legs{margin:8px 0 4px;display:flex;flex-direction:column;gap:6px}
-  .leg{display:flex;align-items:center;gap:8px}
-  .leg .lk{flex:0 0 40px;background:var(--soft);border:1px solid var(--line);border-radius:8px;text-align:center;font-weight:600;font-size:12px;padding:6px 0}
-  .leg .lm{flex:1;font-size:12px;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-  .lgb{border:1px solid var(--line);background:var(--soft);color:var(--muted);border-radius:8px;padding:7px 12px;font-size:12px;font-weight:600;cursor:pointer}
-  .lgb.g.on{background:var(--green);border-color:var(--green);color:#062}
-  .lgb.r.on{background:var(--red);border-color:var(--red);color:#fff}
   .btn-full{width:100%;margin-top:8px}
 
   .bets{list-style:none;padding:0;margin:0}
@@ -151,23 +144,21 @@
     <label class="f">Équipe 2<input type="text" id="e2" placeholder="Extérieur"></label>
   </div>
 
-  <div class="hintlbl"><span class="a">Issue</span><span class="b">Cote</span><span class="c">Mise €</span></div>
-  <div class="calc-row"><span class="ck">1/N</span><input type="number" id="odds1" step="0.01" placeholder="cote 1X" inputmode="decimal" oninput="updateCalc()"><input type="number" id="mise1" step="1" placeholder="mise" inputmode="numeric" oninput="updateCalc()"></div>
-  <div class="calc-row"><span class="ck">N</span><input type="number" id="oddsN" step="0.01" placeholder="cote nul" inputmode="decimal" oninput="updateCalc()"><input type="number" id="miseN" step="1" placeholder="mise" inputmode="numeric" oninput="updateCalc()"></div>
-  <div class="calc-row"><span class="ck">2/N</span><input type="number" id="odds2" step="0.01" placeholder="cote 2X" inputmode="decimal" oninput="updateCalc()"><input type="number" id="mise2" step="1" placeholder="mise" inputmode="numeric" oninput="updateCalc()"></div>
+  <div class="hintlbl"><span class="a">Issue</span><span class="b">Cote (0 = ne pas jouer)</span><span class="c">À miser</span></div>
+  <div class="calc-row"><span class="ck">1/N</span><input type="number" id="odds1" step="0.01" placeholder="20.00" inputmode="decimal" oninput="updateCalc()"><span class="cs off" id="st1">—</span></div>
+  <div class="calc-row"><span class="ck">N/N</span><input type="number" id="oddsN" step="0.01" placeholder="0" inputmode="decimal" oninput="updateCalc()"><span class="cs off" id="stN">—</span></div>
+  <div class="calc-row"><span class="ck">2/N</span><input type="number" id="odds2" step="0.01" placeholder="24.00" inputmode="decimal" oninput="updateCalc()"><span class="cs off" id="st2">—</span></div>
 
-  <div class="grid2" style="margin-top:8px;align-items:end">
-    <label class="f">Koruma bütçesi € (1/N + 2/N)<input type="number" id="koruma" step="1" placeholder="180" inputmode="numeric"></label>
-    <button class="btn-soft" style="height:46px" onclick="suggest()">⚖️ Öner (1/N &amp; 2/N)</button>
+  <div class="grid2" style="margin-top:8px">
+    <label class="f">Gain souhaité €<input type="number" id="objectif" step="1" placeholder="500" inputmode="numeric" oninput="onObjectifInput()"></label>
+    <label class="f">Perte à récupérer €<input type="number" id="perte" step="1" placeholder="0" inputmode="numeric" oninput="updateCalc()"></label>
   </div>
 
   <div class="warn" id="calcWarn"></div>
 
   <div class="result">
-    <div class="rrow"><span class="rlbl">Si <b>1</b> gagne · Domicile</span><span class="cs off" id="net1">—</span></div>
-    <div class="rrow" style="background:rgba(34,197,94,.10);border-radius:10px;padding-left:8px;padding-right:8px"><span class="rlbl">Si <b>N</b> · Nul 🎯 jackpot</span><span class="cs off" id="netN">—</span></div>
-    <div class="rrow"><span class="rlbl">Si <b>2</b> gagne · Extérieur</span><span class="cs off" id="net2">—</span></div>
     <div class="rrow"><span class="rlbl">Mise totale</span><span id="calcTotal">—</span></div>
+    <div class="rrow"><span class="rlbl">Gain net garanti</span><span id="calcNet">—</span></div>
   </div>
 
   <button class="btn-primary btn-full" onclick="addBet()">Enregistrer le pari</button>
@@ -260,70 +251,57 @@ function money(n){ return (n>0?'+':'')+fmt(n)+' €'; }
 function todayDate(){ const d=new Date(); return String(d.getDate()).padStart(2,'0')+'/'+String(d.getMonth()+1).padStart(2,'0')+'/'+String(d.getFullYear()).slice(2); }
 function getLeague(){ return data.leagues.find(l=>l.id===selLeague) || null; }
 
-// Her bahis (leg) bağımsız: Gagné -> mise×(cote-1), Perdu -> -mise, pending -> 0
-function legProfit(stake,odds,status){ if(status==='win') return stake*(odds-1); if(status==='loss') return -stake; return 0; }
-function drawJackpot(b){ return (['1/N','N','2/N'].reduce((s,k)=>s+(b.stakes[k]||0)*(b.cotes[k]||0),0)) - (b.total||0); }
-function betStatus(b){ if(b.legs){ return Object.values(b.legs).every(x=>x==='pending')?'pending':'settled'; } return b.result; }
-function betProfit(b){
-  if(b.legs){ return ['1/N','N','2/N'].reduce((s,k)=>s+legProfit(b.stakes[k]||0, b.cotes[k]||0, b.legs[k]||'pending'),0); }
-  if(b.result==='win') return b.P||0; if(b.result==='loss') return -b.total; return 0; // eski model
-}
-function setLeg(id,key,status){ const L=getLeague(); if(!L)return; const b=L.bets.find(x=>x.id===id); if(!b||!b.legs)return; b.legs[key]=(b.legs[key]===status)?'pending':status; save(); render(); }
-function currentLoss(bets){ let acc=0; [...bets].reverse().forEach(b=>{ if(betStatus(b)==='pending')return; const p=betProfit(b); if(p<0) acc+=-p; else if(p>0) acc=0; }); return acc; }
+function betProfit(b){ if(b.result==='win') return b.P; if(b.result==='loss') return -b.total; return 0; }
+function currentLoss(bets){ let acc=0; [...bets].reverse().forEach(b=>{ if(b.result==='loss') acc+=b.total; else if(b.result==='win') acc=0; }); return acc; }
 
-// ---- CALCUL (N ana bahis + 1/N & 2/N koruma) ----
-// Sonuçlar: 1 (Domicile) -> sadece 1/N kazanır | N (Nul) -> ÜÇÜ birden kazanır (jackpot) | 2 (Extérieur) -> sadece 2/N kazanır
-function readBet(){
-  const g = id=>parseFloat(document.getElementById(id).value)||0;
-  const d1=g('odds1'), dN=g('oddsN'), d2=g('odds2');
-  const s1=g('mise1'), sN=g('miseN'), s2=g('mise2');
-  const total=s1+sN+s2;
-  const net1 = s1>0 ? s1*d1 - total : -total;      // 1 gelirse: 1/N tutar
-  const net2 = s2>0 ? s2*d2 - total : -total;      // 2 gelirse: 2/N tutar
-  const netN = (s1*d1 + sN*dN + s2*d2) - total;    // N gelirse: üçü de tutar
-  return { d1,dN,d2, s1,sN,s2, total, nets:{'1':net1,'N':netN,'2':net2} };
+// ---- DUTCHING ----
+function readOdds(){
+  const o1=parseFloat(document.getElementById('odds1').value)||0;
+  const oN=parseFloat(document.getElementById('oddsN').value)||0;
+  const o2=parseFloat(document.getElementById('odds2').value)||0;
+  const arr=[];
+  if(o1>1) arr.push({key:'1/N',odds:o1}); if(oN>1) arr.push({key:'N/N',odds:oN}); if(o2>1) arr.push({key:'2/N',odds:o2});
+  return arr;
 }
-function setNet(id,v,hasStake){
-  const e=document.getElementById(id);
-  if(!hasStake){ e.textContent='—'; e.className='cs off'; return; }
-  e.textContent=money(v);
-  e.className='cs'; e.style.color = v>=0 ? 'var(--green)' : '#ff8b8b';
+function dutch(active,P){
+  if(active.length===0||P<=0) return null;
+  const k=active.reduce((s,o)=>s+1/o.odds,0);
+  if(k>=1) return {impossible:true};
+  const R=P/(1-k);
+  const stakes=active.map(o=>({key:o.key,odds:o.odds,stake:R/o.odds}));
+  return { stakes, total:stakes.reduce((s,x)=>s+x.stake,0), net:P };
 }
 function updateCalc(){
-  const b=readBet();
-  const any = b.total>0;
-  setNet('net1', b.nets['1'], any && b.s1>0);
-  setNet('netN', b.nets['N'], any);
-  setNet('net2', b.nets['2'], any && b.s2>0);
-  document.getElementById('calcTotal').textContent = any ? fmt(b.total)+' €' : '—';
+  const obj=parseFloat(document.getElementById('objectif').value)||0;
+  const perte=parseFloat(document.getElementById('perte').value)||0;
+  const res=dutch(readOdds(), obj+perte);
+  const map={'1/N':'st1','N/N':'stN','2/N':'st2'};
+  ['st1','stN','st2'].forEach(id=>{ const e=document.getElementById(id); e.textContent='—'; e.className='cs off'; });
   const warn=document.getElementById('calcWarn');
-  if(any && b.sN>0 && b.dN>0 && b.dN<b.d1 && b.dN<b.d2){ warn.style.display='none'; }
-  else warn.style.display='none';
+  document.getElementById('calcTotal').textContent='—'; document.getElementById('calcNet').textContent='—';
+  if(!res){ warn.style.display='none'; return; }
+  if(res.impossible){ warn.style.display='block'; warn.textContent='⚠️ Cotes trop basses : aucun gain garanti. Baissez le nombre d\'issues ou choisissez des cotes plus hautes.'; return; }
+  warn.style.display='none';
+  res.stakes.forEach(s=>{ const e=document.getElementById(map[s.key]); e.textContent=fmt(s.stake)+' €'; e.className='cs'; });
+  document.getElementById('calcTotal').textContent=fmt(res.total)+' €';
+  document.getElementById('calcNet').textContent='+'+fmt(res.net)+' €';
 }
-// Öner: koruma bütçesini 1/N ve 2/N arasında, iki tarafın da EŞİT dönsün diye paylaştırır
-function suggest(){
-  const g=id=>parseFloat(document.getElementById(id).value)||0;
-  const d1=g('odds1'), d2=g('odds2'), I=g('koruma');
-  if(d1<=1||d2<=1){ alert('Önce 1/N ve 2/N oranlarını gir.'); return; }
-  if(I<=0){ alert('Koruma bütçesi € gir (1/N + 2/N için ayıracağın para).'); return; }
-  const s1 = I * d2/(d1+d2);   // s1*d1 == s2*d2 olacak şekilde
-  const s2 = I * d1/(d1+d2);
-  document.getElementById('mise1').value = Math.round(s1);
-  document.getElementById('mise2').value = Math.round(s2);
-  updateCalc();
-}
+function onObjectifInput(){ const L=getLeague(); if(L){ const t=parseFloat(document.getElementById('objectif').value); if(!isNaN(t)&&t>=0){ L.target=t; save(); } } updateCalc(); }
 
 // ---- AJOUTER ----
 function addBet(){
   const L=getLeague(); if(!L){ alert("Ajoutez d'abord une ligue (Admin)."); return; }
-  const b=readBet();
-  if(b.total<=0){ alert("Au moins une mise (€) est requise."); return; }
-  const cotes={'1/N':b.d1,'N':b.dN,'2/N':b.d2};
-  const stakes={'1/N':Math.round(b.s1*100)/100,'N':Math.round(b.sN*100)/100,'2/N':Math.round(b.s2*100)/100};
-  L.bets.unshift({ id:"b"+Date.now(), date:todayDate(), mode:'draw3',
+  const obj=parseFloat(document.getElementById('objectif').value)||0;
+  const perte=parseFloat(document.getElementById('perte').value)||0;
+  const active=readOdds(); const res=dutch(active, obj+perte);
+  if(!res||res.impossible){ alert("Renseignez au moins une cote (>1), un gain souhaité, et des cotes assez hautes."); return; }
+  const cotes={}, stakes={};
+  active.forEach(o=>cotes[o.key]=o.odds);
+  res.stakes.forEach(s=>stakes[s.key]=Math.round(s.stake*100)/100);
+  L.bets.unshift({ id:"b"+Date.now(), date:todayDate(),
     e1:document.getElementById('e1').value.trim()||'Match', e2:document.getElementById('e2').value.trim()||'',
-    cotes, stakes, total:b.total, legs:{'1/N':'pending','N':'pending','2/N':'pending'} });
-  ['e1','e2','odds1','oddsN','odds2','mise1','miseN','mise2','koruma'].forEach(id=>document.getElementById(id).value='');
+    cotes, stakes, total:res.total, P:res.net, result:'pending' });
+  ['e1','e2','odds1','oddsN','odds2'].forEach(id=>document.getElementById(id).value='');
   save(); render();
 }
 function setResult(id,res){ const L=getLeague(); if(!L) return; const b=L.bets.find(x=>x.id===id); if(!b) return; b.result=(b.result===res)?'pending':res; save(); render(); }
@@ -355,7 +333,7 @@ function clearLeague(){ openPin({type:'clearLeague'}); }
 function render(){
   const bar=document.getElementById('leaguesBar');
   bar.innerHTML = data.leagues.map(l=>{
-    const st=l.bets.filter(b=>betStatus(b)!=='pending');
+    const st=l.bets.filter(b=>b.result!=='pending');
     const net=st.reduce((s,b)=>s+betProfit(b),0);
     const cls=net>0?'pos':(net<0?'neg':'');
     return `<div class="pill ${l.id===selLeague?'active':''}" onclick="selectLeague('${l.id}')"><span class="pn">${l.name}</span><span class="pnet ${cls}">${money(net)}</span></div>`;
@@ -368,11 +346,11 @@ function render(){
     document.getElementById('budget').textContent='—'; document.getElementById('solde').textContent='—'; document.getElementById('toRecover').textContent='—';
     document.getElementById('rateLine').textContent='Ajoutez une ligue dans l\'Admin';
     document.getElementById('betList').innerHTML='<div class="empty">Aucune ligue. Ouvrez l\'Admin pour en ajouter.</div>';
-    updateCalc(); renderLeaguesAdmin(); return;
+    document.getElementById('objectif').value=''; document.getElementById('perte').value=''; updateCalc(); renderLeaguesAdmin(); return;
   }
-  const settled=L.bets.filter(b=>betStatus(b)!=='pending');
+  const settled=L.bets.filter(b=>b.result!=='pending');
   const net=settled.reduce((s,b)=>s+betProfit(b),0);
-  const wins=settled.filter(b=>betProfit(b)>0).length;
+  const wins=settled.filter(b=>b.result==='win').length;
   const loss=currentLoss(L.bets);
   document.getElementById('jeuTitle').textContent=L.name;
   np.textContent=money(net); np.className='bval big '+(net>=0?'pos':'neg');
@@ -380,39 +358,27 @@ function render(){
   document.getElementById('solde').textContent=fmt(L.budget+net)+' €';
   document.getElementById('toRecover').textContent=fmt(loss)+' €';
   document.getElementById('rateLine').textContent = settled.length? `${settled.length} paris réglés · ${Math.round(wins/settled.length*100)}% de réussite` : 'Aucun pari réglé';
+  document.getElementById('objectif').value=L.target;
+  document.getElementById('perte').value = loss? Math.round(loss*100)/100 : '';
 
   const list=document.getElementById('betList');
   if(L.bets.length===0){ list.innerHTML='<div class="empty">Aucun pari.</div>'; }
   else list.innerHTML=L.bets.map(b=>{
-    const isNew=!!b.legs; const p=betProfit(b); const st=betStatus(b); let amtHtml,tag,body;
-    if(st==='pending'){
-      const head = isNew ? '+'+fmt(drawJackpot(b))+' € si Nul' : '+'+fmt(b.P||0)+' €';
-      amtHtml=`<span class="amt wait">${head}</span>`; tag='<span class="tag pending">En attente</span>';
-    } else if(p>=0){ amtHtml=`<span class="amt pos">${money(p)}</span>`; tag='<span class="tag win">Gagné</span>'; }
+    const p=betProfit(b); let amtHtml,tag;
+    if(b.result==='pending'){ amtHtml=`<span class="amt wait">+${fmt(b.P)} €</span>`; tag='<span class="tag pending">En attente</span>'; }
+    else if(b.result==='win'){ amtHtml=`<span class="amt pos">${money(p)}</span>`; tag='<span class="tag win">Gagné</span>'; }
     else { amtHtml=`<span class="amt neg">${money(p)}</span>`; tag='<span class="tag loss">Perdu</span>'; }
-    if(isNew){
-      body = `<div class="legs">`+['1/N','N','2/N'].filter(k=>(b.stakes[k]||0)>0).map(k=>{
-        const s=b.legs[k]||'pending';
-        return `<div class="leg">
-          <span class="lk">${k}</span>
-          <span class="lm">${fmt(b.stakes[k])}€ <span style="color:#b9c0cd">(${fmt(b.cotes[k])})</span></span>
-          <button class="lgb g ${s==='win'?'on':''}" onclick="setLeg('${b.id}','${k}','win')">Gagné</button>
-          <button class="lgb r ${s==='loss'?'on':''}" onclick="setLeg('${b.id}','${k}','loss')">Perdu</button>
-        </div>`;
-      }).join('')+`</div>`;
-    } else {
-      const parts=Object.keys(b.stakes).filter(k=>b.stakes[k]>0).map(k=>`<b>${k}</b> ${fmt(b.stakes[k])}€ <span style="color:#b9c0cd">(${fmt(b.cotes[k])})</span>`).join(' · ');
-      body=`<div class="meta">${parts}</div><div class="actions">
-        <button class="btn-green" onclick="setResult('${b.id}','win')">${b.result==='win'?'✓ Gagné':'Gagné'}</button>
-        <button class="btn-red" onclick="setResult('${b.id}','loss')">${b.result==='loss'?'✓ Perdu':'Perdu'}</button></div>`;
-    }
-    return `<li class="bet ${st}">
+    const parts=Object.keys(b.stakes).map(k=>`<b>${k}</b> ${fmt(b.stakes[k])}€ <span style="color:#b9c0cd">(${fmt(b.cotes[k])})</span>`).join(' · ');
+    return `<li class="bet ${b.result}">
       <div class="row1">
         <div style="min-width:0"><div class="match">${b.e1}${b.e2?' <span style="color:var(--muted)">–</span> '+b.e2:''}</div>
-          <div class="meta">${b.date} · mise totale ${fmt(b.total)}€</div></div>
+          <div class="meta">${b.date} · mise totale ${fmt(b.total)}€<br>${parts}</div></div>
         <div style="text-align:right">${tag}<br>${amtHtml}</div>
       </div>
-      ${body}
+      <div class="actions">
+        <button class="btn-green" onclick="setResult('${b.id}','win')">${b.result==='win'?'✓ Gagné':'Gagné'}</button>
+        <button class="btn-red" onclick="setResult('${b.id}','loss')">${b.result==='loss'?'✓ Perdu':'Perdu'}</button>
+      </div>
       <div style="text-align:right;margin-top:6px"><button class="del" onclick="askDelete('${b.id}')">🗑️ supprimer</button></div>
     </li>`;
   }).join('');
