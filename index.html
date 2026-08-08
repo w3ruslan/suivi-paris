@@ -310,7 +310,7 @@ function dutch(active,P){
   const k=active.reduce((s,o)=>s+1/o.odds,0);
   if(k>=1) return {impossible:true};
   const R=P/(1-k);
-  const stakes=active.map(o=>({key:o.key,odds:o.odds,stake:R/o.odds}));
+  const stakes=active.map(o=>({key:o.key,odds:o.odds,stake:R/o.odds,cell:o.cell,m:o.m,lbl:o.lbl}));
   return { stakes, total:stakes.reduce((s,x)=>s+x.stake,0), net:P };
 }
 function updateCalc(){
@@ -333,35 +333,20 @@ function updateCalc(){
       warn.innerHTML="⚠️ Avec ces cotes, <b>aucun gain garanti n'est possible</b> (il faudrait plusieurs sélections gagnantes).<br>Renseignez « Mise totale € » pour voir la répartition et les scénarios.";
       return;
     }
-    // Bütçeyi maçlara eşit, maç içinde 1/oran ile orantılı dağıt
-    const maclar=[...new Set(active.map(a=>a.m))];
-    const macBasi=budget/maclar.length;
-    const st={};
-    maclar.forEach(m=>{
-      const sec=active.filter(a=>a.m===m);
-      const km=sec.reduce((s,o)=>s+1/o.odds,0);
-      sec.forEach(o=>{ st[o.key]=macBasi*(1/o.odds)/km; });
-    });
+    // Seçimler birbirini dışlar (İY/MS kombinasyonları) → eşit getiri verecek dağıtım
+    const k=active.reduce((s,o)=>s+1/o.odds,0);
+    const R=budget/k;
     active.forEach(o=>{ const e=document.getElementById(o.cell);
-      if(e){ e.textContent=fmt(st[o.key])+' €'; e.className='cs'; } });
+      if(e){ e.textContent=fmt(budget*(1/o.odds)/k)+' €'; e.className='cs'; } });
     document.getElementById('calcTotal').textContent=fmt(budget)+' €';
-    // DOĞRU MODEL: 1/N ve 2/N aynı maçta örtüşür — beraberlikte İKİSİ de kazanır
-    let enKotu=0, enIyi=0;
-    maclar.forEach(m=>{
-      const g=lbl=>{ const o=active.find(a=>a.m===m&&a.lbl===lbl); return o? st[o.key]*o.odds : 0; };
-      const ev=g('1/N'), be=g('1/N')+g('N/N')+g('2/N'), dep=g('2/N');
-      enKotu += Math.min(ev,dep,be);        // en kötü ihtimal
-      enIyi  += be;                          // hepsi berabere biterse
-    });
-    const netKotu=enKotu-budget, netIyi=enIyi-budget;
+    const net1=R-budget;
     const el=document.getElementById('calcNet');
-    el.textContent=(netKotu>=0?'+':'')+fmt(netKotu)+' €';
-    el.style.color = netKotu>=0 ? 'var(--green)' : '#ff8b8b';
-    document.getElementById('netLbl').textContent='Pire cas (aucun nul)';
-    warn.innerHTML=`⚠️ <b>Gain non garanti.</b>
-      Pire cas → <b>${netKotu>=0?'+':''}${fmt(netKotu)} €</b> ·
-      Tous nuls → <b>${netIyi>=0?'+':''}${fmt(netIyi)} €</b><br>
-      <span style="opacity:.85">1/N et 2/N du même match se chevauchent : un nul fait gagner les deux.</span>`;
+    el.textContent=(net1>=0?'+':'')+fmt(net1)+' €';
+    el.style.color = net1>=0 ? 'var(--green)' : '#ff8b8b';
+    document.getElementById('netLbl').textContent='Si UNE gagne';
+    warn.innerHTML=`⚠️ <b>Gain non garanti avec ces cotes.</b>
+      Une gagnante → <b>${net1>=0?'+':''}${fmt(net1)} €</b> ·
+      Aucune gagnante → <b>−${fmt(budget)} €</b>`;
     return;
   }
   res.stakes.forEach(s=>{ const e=document.getElementById(s.cell); if(e){ e.textContent=fmt(s.stake)+' €'; e.className='cs'; } });
