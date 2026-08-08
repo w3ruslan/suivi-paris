@@ -50,6 +50,14 @@
   input:focus{outline:none;border-color:var(--accent)}
   .vs{display:flex;align-items:flex-end;justify-content:center;color:var(--muted);font-weight:600;font-size:13px;padding-bottom:12px}
 
+  select{background:var(--soft);border:1px solid var(--line);color:var(--ink);border-radius:12px;padding:13px;font-size:15px;width:100%;font-family:inherit;cursor:pointer}
+  select:focus{outline:none;border-color:var(--accent)}
+  .mblock{background:var(--soft);border:1px solid var(--line);border-radius:16px;padding:12px;margin-bottom:10px}
+  .mblock .mh{display:flex;align-items:center;gap:8px;margin-bottom:8px}
+  .mblock .mn{background:var(--accent);color:#fff;font-size:11px;font-weight:800;border-radius:20px;padding:3px 10px}
+  .mblock input[type=text]{padding:9px;font-size:14px}
+  .mblock .grid2{gap:8px}
+  .mblock label.f{margin-bottom:8px;font-size:11px}
   .hintlbl{font-size:11px;color:var(--muted);display:flex;gap:12px;margin:2px 2px 8px}
   .hintlbl .a{flex:0 0 52px;text-align:center}.hintlbl .b{flex:1}.hintlbl .c{flex:0 0 96px;text-align:right}
   .calc-row{display:flex;align-items:center;gap:12px;margin-bottom:10px}
@@ -138,27 +146,32 @@
 <!-- Nouveau pari -->
 <div class="card">
   <h2>Nouveau pari</h2>
-  <div class="grid2">
-    <label class="f">Équipe 1<input type="text" id="e1" placeholder="Domicile"></label>
-    <div class="vs">vs</div>
-    <label class="f">Équipe 2<input type="text" id="e2" placeholder="Extérieur"></label>
-  </div>
 
-  <div class="hintlbl"><span class="a">Issue</span><span class="b">Cote (0 = ne pas jouer)</span><span class="c">À miser</span></div>
-  <div class="calc-row"><span class="ck">1/N</span><input type="number" id="odds1" step="0.01" placeholder="20.00" inputmode="decimal" oninput="updateCalc()"><span class="cs off" id="st1">—</span></div>
-  <div class="calc-row"><span class="ck">N/N</span><input type="number" id="oddsN" step="0.01" placeholder="0" inputmode="decimal" oninput="updateCalc()"><span class="cs off" id="stN">—</span></div>
-  <div class="calc-row"><span class="ck">2/N</span><input type="number" id="odds2" step="0.01" placeholder="24.00" inputmode="decimal" oninput="updateCalc()"><span class="cs off" id="st2">—</span></div>
+  <label class="f" style="margin-bottom:10px">Matchs qui commencent en même temps
+    <select id="nbMatch" onchange="renderMatchBlocks()">
+      <option value="1">1 match</option>
+      <option value="2">2 matchs simultanés</option>
+      <option value="3">3 matchs simultanés</option>
+      <option value="4">4 matchs simultanés</option>
+      <option value="5">5 matchs simultanés</option>
+    </select>
+  </label>
+
+  <div id="matchBlocks"></div>
 
   <div class="grid2" style="margin-top:8px">
     <label class="f">Gain souhaité €<input type="number" id="objectif" step="1" placeholder="500" inputmode="numeric" oninput="onObjectifInput()"></label>
     <label class="f">Perte à récupérer €<input type="number" id="perte" step="1" placeholder="0" inputmode="numeric" oninput="updateCalc()"></label>
+  </div>
+  <div class="grid2">
+    <label class="f">Mise totale € <span style="text-transform:none;font-weight:400">(si gain non garanti)</span><input type="number" id="budget" step="1" placeholder="ex : 300" inputmode="numeric" oninput="updateCalc()"></label>
   </div>
 
   <div class="warn" id="calcWarn"></div>
 
   <div class="result">
     <div class="rrow"><span class="rlbl">Mise totale</span><span id="calcTotal">—</span></div>
-    <div class="rrow"><span class="rlbl">Gain net garanti</span><span id="calcNet">—</span></div>
+    <div class="rrow"><span class="rlbl" id="netLbl">Gain net garanti</span><span id="calcNet">—</span></div>
   </div>
 
   <button class="btn-primary btn-full" onclick="addBet()">Enregistrer le pari</button>
@@ -254,13 +267,42 @@ function getLeague(){ return data.leagues.find(l=>l.id===selLeague) || null; }
 function betProfit(b){ if(b.result==='win') return b.P; if(b.result==='loss') return -b.total; return 0; }
 function currentLoss(bets){ let acc=0; [...bets].reverse().forEach(b=>{ if(b.result==='loss') acc+=b.total; else if(b.result==='win') acc=0; }); return acc; }
 
+// ---- BLOCS DE MATCHS (1 à 5 matchs simultanés) ----
+function nbMatch(){ return parseInt(document.getElementById('nbMatch').value)||1; }
+function renderMatchBlocks(){
+  const n=nbMatch(), box=document.getElementById('matchBlocks');
+  const eski={};                                  // mevcut değerleri koru
+  box.querySelectorAll('input').forEach(i=>eski[i.id]=i.value);
+  let html='';
+  for(let m=1;m<=n;m++){
+    html+=`<div class="mblock">
+      ${n>1?`<div class="mh"><span class="mn">MATCH ${m}</span></div>`:''}
+      <div class="grid2">
+        <label class="f">Équipe 1<input type="text" id="e1_${m}" placeholder="Domicile"></label>
+        <div class="vs">vs</div>
+        <label class="f">Équipe 2<input type="text" id="e2_${m}" placeholder="Extérieur"></label>
+      </div>
+      <div class="hintlbl"><span class="a">Issue</span><span class="b">Cote (vide = ne pas jouer)</span><span class="c">À miser</span></div>
+      <div class="calc-row"><span class="ck">1/N</span><input type="number" id="o1_${m}" step="0.01" placeholder="cote" inputmode="decimal" oninput="updateCalc()"><span class="cs off" id="s1_${m}">—</span></div>
+      <div class="calc-row"><span class="ck">N/N</span><input type="number" id="oN_${m}" step="0.01" placeholder="vide" inputmode="decimal" oninput="updateCalc()"><span class="cs off" id="sN_${m}">—</span></div>
+      <div class="calc-row"><span class="ck">2/N</span><input type="number" id="o2_${m}" step="0.01" placeholder="cote" inputmode="decimal" oninput="updateCalc()"><span class="cs off" id="s2_${m}">—</span></div>
+    </div>`;
+  }
+  box.innerHTML=html;
+  Object.keys(eski).forEach(id=>{ const el=document.getElementById(id); if(el) el.value=eski[id]; });
+  updateCalc();
+}
+
 // ---- DUTCHING ----
 function readOdds(){
-  const o1=parseFloat(document.getElementById('odds1').value)||0;
-  const oN=parseFloat(document.getElementById('oddsN').value)||0;
-  const o2=parseFloat(document.getElementById('odds2').value)||0;
-  const arr=[];
-  if(o1>1) arr.push({key:'1/N',odds:o1}); if(oN>1) arr.push({key:'N/N',odds:oN}); if(o2>1) arr.push({key:'2/N',odds:o2});
+  const n=nbMatch(), arr=[];
+  for(let m=1;m<=n;m++){
+    [['1/N','o1_'],['N/N','oN_'],['2/N','o2_']].forEach(([lbl,pre])=>{
+      const el=document.getElementById(pre+m); if(!el) return;
+      const o=parseFloat(el.value)||0;
+      if(o>1) arr.push({ key:(n>1?`M${m} ${lbl}`:lbl), odds:o, m, lbl, cell:pre.replace('o','s')+m });
+    });
+  }
   return arr;
 }
 function dutch(active,P){
@@ -274,17 +316,64 @@ function dutch(active,P){
 function updateCalc(){
   const obj=parseFloat(document.getElementById('objectif').value)||0;
   const perte=parseFloat(document.getElementById('perte').value)||0;
-  const res=dutch(readOdds(), obj+perte);
-  const map={'1/N':'st1','N/N':'stN','2/N':'st2'};
-  ['st1','stN','st2'].forEach(id=>{ const e=document.getElementById(id); e.textContent='—'; e.className='cs off'; });
+  const active=readOdds();
+  const res=dutch(active, obj+perte);
+  const n=nbMatch();
+  // tüm mise hücrelerini sıfırla
+  document.querySelectorAll('#matchBlocks .cs').forEach(e=>{ e.textContent='—'; e.className='cs off'; });
   const warn=document.getElementById('calcWarn');
   document.getElementById('calcTotal').textContent='—'; document.getElementById('calcNet').textContent='—';
+  document.getElementById('netLbl').textContent = n>1 ? 'Gain si UNE seule gagne' : 'Gain net garanti';
   if(!res){ warn.style.display='none'; return; }
-  if(res.impossible){ warn.style.display='block'; warn.textContent='⚠️ Cotes trop basses : aucun gain garanti. Baissez le nombre d\'issues ou choisissez des cotes plus hautes.'; return; }
-  warn.style.display='none';
-  res.stakes.forEach(s=>{ const e=document.getElementById(map[s.key]); e.textContent=fmt(s.stake)+' €'; e.className='cs'; });
+  if(res.impossible){
+    // Garanti mümkün değil -> girilen toplam mise'i esit getiri verecek sekilde dagit ve DURUSTCE goster
+    const budget=parseFloat(document.getElementById('budget').value)||0;
+    warn.style.display='block';
+    if(budget<=0){
+      warn.innerHTML="⚠️ Avec ces cotes, <b>aucun gain garanti n'est possible</b> (il faudrait plusieurs sélections gagnantes).<br>Renseignez « Mise totale € » pour voir la répartition et les scénarios.";
+      return;
+    }
+    // Bütçeyi maçlara eşit, maç içinde 1/oran ile orantılı dağıt
+    const maclar=[...new Set(active.map(a=>a.m))];
+    const macBasi=budget/maclar.length;
+    const st={};
+    maclar.forEach(m=>{
+      const sec=active.filter(a=>a.m===m);
+      const km=sec.reduce((s,o)=>s+1/o.odds,0);
+      sec.forEach(o=>{ st[o.key]=macBasi*(1/o.odds)/km; });
+    });
+    active.forEach(o=>{ const e=document.getElementById(o.cell);
+      if(e){ e.textContent=fmt(st[o.key])+' €'; e.className='cs'; } });
+    document.getElementById('calcTotal').textContent=fmt(budget)+' €';
+    // DOĞRU MODEL: 1/N ve 2/N aynı maçta örtüşür — beraberlikte İKİSİ de kazanır
+    let enKotu=0, enIyi=0;
+    maclar.forEach(m=>{
+      const g=lbl=>{ const o=active.find(a=>a.m===m&&a.lbl===lbl); return o? st[o.key]*o.odds : 0; };
+      const ev=g('1/N'), be=g('1/N')+g('N/N')+g('2/N'), dep=g('2/N');
+      enKotu += Math.min(ev,dep,be);        // en kötü ihtimal
+      enIyi  += be;                          // hepsi berabere biterse
+    });
+    const netKotu=enKotu-budget, netIyi=enIyi-budget;
+    const el=document.getElementById('calcNet');
+    el.textContent=(netKotu>=0?'+':'')+fmt(netKotu)+' €';
+    el.style.color = netKotu>=0 ? 'var(--green)' : '#ff8b8b';
+    document.getElementById('netLbl').textContent='Pire cas (aucun nul)';
+    warn.innerHTML=`⚠️ <b>Gain non garanti.</b>
+      Pire cas → <b>${netKotu>=0?'+':''}${fmt(netKotu)} €</b> ·
+      Tous nuls → <b>${netIyi>=0?'+':''}${fmt(netIyi)} €</b><br>
+      <span style="opacity:.85">1/N et 2/N du même match se chevauchent : un nul fait gagner les deux.</span>`;
+    return;
+  }
+  res.stakes.forEach(s=>{ const e=document.getElementById(s.cell); if(e){ e.textContent=fmt(s.stake)+' €'; e.className='cs'; } });
   document.getElementById('calcTotal').textContent=fmt(res.total)+' €';
   document.getElementById('calcNet').textContent='+'+fmt(res.net)+' €';
+  // çoklu maçta garanti yok — dürüst uyarı
+  const macSayisi=new Set(active.map(a=>a.m)).size;
+  if(macSayisi>1){
+    warn.style.display='block';
+    warn.innerHTML=`⚠️ <b>${macSayisi} ayrı maça</b> yayıldı : <b>aucun gain garanti</b>.<br>
+      Si au moins une sélection gagne → <b>+${fmt(res.net)} €</b>. Si toutes perdent → <b>−${fmt(res.total)} €</b>.`;
+  } else warn.style.display='none';
 }
 function onObjectifInput(){ const L=getLeague(); if(L){ const t=parseFloat(document.getElementById('objectif').value); if(!isNaN(t)&&t>=0){ L.target=t; save(); } } updateCalc(); }
 
@@ -298,10 +387,19 @@ function addBet(){
   const cotes={}, stakes={};
   active.forEach(o=>cotes[o.key]=o.odds);
   res.stakes.forEach(s=>stakes[s.key]=Math.round(s.stake*100)/100);
+  const n=nbMatch();
+  const macAdlari=[];
+  for(let m=1;m<=n;m++){
+    const a=(document.getElementById('e1_'+m)||{}).value||'', b=(document.getElementById('e2_'+m)||{}).value||'';
+    if(a.trim()||b.trim()) macAdlari.push((a.trim()||'Match')+(b.trim()?' – '+b.trim():''));
+  }
+  const kacMac=new Set(active.map(o=>o.m)).size;
   L.bets.unshift({ id:"b"+Date.now(), date:todayDate(),
-    e1:document.getElementById('e1').value.trim()||'Match', e2:document.getElementById('e2').value.trim()||'',
+    e1: macAdlari[0] || 'Match', e2:'',
+    matchs: macAdlari.length>1 ? macAdlari : undefined,
+    nb: kacMac>1 ? kacMac : undefined,
     cotes, stakes, total:res.total, P:res.net, result:'pending' });
-  ['e1','e2','odds1','oddsN','odds2'].forEach(id=>document.getElementById(id).value='');
+  document.querySelectorAll('#matchBlocks input').forEach(i=>i.value='');
   save(); render();
 }
 function setResult(id,res){ const L=getLeague(); if(!L) return; const b=L.bets.find(x=>x.id===id); if(!b) return; b.result=(b.result===res)?'pending':res; save(); render(); }
@@ -371,7 +469,7 @@ function render(){
     const parts=Object.keys(b.stakes).map(k=>`<b>${k}</b> ${fmt(b.stakes[k])}€ <span style="color:#b9c0cd">(${fmt(b.cotes[k])})</span>`).join(' · ');
     return `<li class="bet ${b.result}">
       <div class="row1">
-        <div style="min-width:0"><div class="match">${b.e1}${b.e2?' <span style="color:var(--muted)">–</span> '+b.e2:''}</div>
+        <div style="min-width:0"><div class="match">${b.nb?`<span style="background:var(--accent);color:#fff;font-size:10px;font-weight:800;border-radius:20px;padding:2px 8px;margin-right:6px">${b.nb} MATCHS</span>`:''}${b.matchs?b.matchs.join(' · '):(b.e1+(b.e2?' <span style="color:var(--muted)">–</span> '+b.e2:''))}</div>
           <div class="meta">${b.date} · mise totale ${fmt(b.total)}€<br>${parts}</div></div>
         <div style="text-align:right">${tag}<br>${amtHtml}</div>
       </div>
@@ -418,6 +516,7 @@ function checkPin(){
   }
 }
 
+renderMatchBlocks();
 render();
 pullData();
 document.addEventListener('visibilitychange',()=>{ if(!document.hidden) pullData(); });
