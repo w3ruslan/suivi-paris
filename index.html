@@ -78,6 +78,11 @@
   .calc-row input{flex:1}
   .cs{flex:0 0 96px;text-align:right;font-weight:700;color:var(--green);font-size:15px;white-space:nowrap}
   .cs.off{color:#5b6885;font-weight:500}
+  .cs-in{flex:0 0 96px;width:96px;text-align:right;font-weight:700;color:var(--green);font-size:15px;
+    background:rgba(34,197,94,.07);border:1px solid rgba(34,197,94,.35);border-radius:10px;padding:10px 8px}
+  .cs-in:focus{border-color:var(--green);background:rgba(34,197,94,.14)}
+  .cs-in.manual{border-color:var(--amber);background:rgba(245,158,11,.12);color:var(--amber)}
+  .cs-in::placeholder{color:#5b6885;font-weight:500}
 
   .warn{background:var(--red-soft);border:1px solid rgba(239,68,68,.4);color:#ff8b8b;border-radius:12px;padding:11px 13px;font-size:12.5px;margin-bottom:12px;display:none}
 
@@ -315,9 +320,9 @@ function renderMatchBlocks(){
         <label class="f">Équipe 2<input type="text" id="e2_${m}" placeholder="Extérieur"></label>
       </div>
       <div class="hintlbl"><span class="a">Issue</span><span class="b">Cote (vide = ne pas jouer)</span><span class="c">À miser</span></div>
-      <div class="calc-row"><span class="ck">1/N</span><input type="number" id="o1_${m}" step="0.01" placeholder="cote" inputmode="decimal" oninput="updateCalc()"><span class="cs off" id="s1_${m}">—</span></div>
-      <div class="calc-row"><span class="ck">N/N</span><input type="number" id="oN_${m}" step="0.01" placeholder="vide" inputmode="decimal" oninput="updateCalc()"><span class="cs off" id="sN_${m}">—</span></div>
-      <div class="calc-row"><span class="ck">2/N</span><input type="number" id="o2_${m}" step="0.01" placeholder="cote" inputmode="decimal" oninput="updateCalc()"><span class="cs off" id="s2_${m}">—</span></div>
+      <div class="calc-row"><span class="ck">1/N</span><input type="number" id="o1_${m}" step="0.01" placeholder="cote" inputmode="decimal" oninput="updateCalc()"><input type="number" class="cs-in" id="s1_${m}" step="0.01" placeholder="—" inputmode="decimal" oninput="onMiseEdit(this)"></div>
+      <div class="calc-row"><span class="ck">N/N</span><input type="number" id="oN_${m}" step="0.01" placeholder="vide" inputmode="decimal" oninput="updateCalc()"><input type="number" class="cs-in" id="sN_${m}" step="0.01" placeholder="—" inputmode="decimal" oninput="onMiseEdit(this)"></div>
+      <div class="calc-row"><span class="ck">2/N</span><input type="number" id="o2_${m}" step="0.01" placeholder="cote" inputmode="decimal" oninput="updateCalc()"><input type="number" class="cs-in" id="s2_${m}" step="0.01" placeholder="—" inputmode="decimal" oninput="onMiseEdit(this)"></div>
     </div>`;
   }
   box.innerHTML=html;
@@ -345,18 +350,26 @@ function dutch(active,P){
   const stakes=active.map(o=>({key:o.key,odds:o.odds,stake:R/o.odds,cell:o.cell,m:o.m,lbl:o.lbl}));
   return { stakes, total:stakes.reduce((s,x)=>s+x.stake,0), net:P };
 }
+// kullanıcı mise'i elle değiştirdi → o kutu artık "manuel", üzerine yazılmaz
+function onMiseEdit(el){ el.classList.add('manual'); el.dataset.manual='1'; updateCalc(); }
+function resetMises(){
+  document.querySelectorAll('.cs-in').forEach(i=>{ i.classList.remove('manual'); delete i.dataset.manual; });
+  updateCalc();
+}
 function updateCalc(){
   const obj=parseFloat(document.getElementById('objectif').value)||0;
   const perte=parseFloat(document.getElementById('perte').value)||0;
   const active=readOdds();
   const res=dutch(active, obj+perte);
   const n=nbMatch();
-  // tüm mise hücrelerini sıfırla
-  document.querySelectorAll('#matchBlocks .cs').forEach(e=>{ e.textContent='—'; e.className='cs off'; });
+  // artık oynanmayan seçimlerin kutusunu boşalt
+  document.querySelectorAll('#matchBlocks .cs-in').forEach(i=>{
+    if(!active.some(a=>a.cell===i.id)){ i.value=''; i.classList.remove('manual'); delete i.dataset.manual; }
+  });
   const warn=document.getElementById('calcWarn');
-  document.getElementById('calcTotal').textContent='—'; document.getElementById('calcNet').textContent='—';
   document.getElementById('netLbl').textContent = n>1 ? 'Gain si UNE seule gagne' : 'Gain net garanti';
-  if(!res){ warn.style.display='none'; return; }
+  if(!res){ warn.style.display='none';
+    document.getElementById('calcTotal').textContent='—'; document.getElementById('calcNet').textContent='—'; return; }
   if(res.impossible){
     // Garanti mümkün değil -> girilen toplam mise'i esit getiri verecek sekilde dagit ve DURUSTCE goster
     const budget=parseFloat(document.getElementById('budget').value)||0;
@@ -365,32 +378,38 @@ function updateCalc(){
       warn.innerHTML="⚠️ Avec ces cotes, <b>aucun gain garanti n'est possible</b> (il faudrait plusieurs sélections gagnantes).<br>Renseignez « Mise totale € » pour voir la répartition et les scénarios.";
       return;
     }
-    // Seçimler birbirini dışlar (İY/MS kombinasyonları) → eşit getiri verecek dağıtım
+    // Seçimler birbirini dışlar → eşit getiri verecek dağıtım (manuel olanlara dokunma)
     const k=active.reduce((s,o)=>s+1/o.odds,0);
-    const R=budget/k;
-    active.forEach(o=>{ const e=document.getElementById(o.cell);
-      if(e){ e.textContent=fmt(budget*(1/o.odds)/k)+' €'; e.className='cs'; } });
-    document.getElementById('calcTotal').textContent=fmt(budget)+' €';
-    const net1=R-budget;
-    const el=document.getElementById('calcNet');
-    el.textContent=(net1>=0?'+':'')+fmt(net1)+' €';
-    el.style.color = net1>=0 ? 'var(--green)' : '#ff8b8b';
-    document.getElementById('netLbl').textContent='Si UNE gagne';
-    warn.innerHTML=`⚠️ <b>Gain non garanti avec ces cotes.</b>
-      Une gagnante → <b>${net1>=0?'+':''}${fmt(net1)} €</b> ·
-      Aucune gagnante → <b>−${fmt(budget)} €</b>`;
-    return;
+    active.forEach(o=>{ const i=document.getElementById(o.cell);
+      if(i && !i.dataset.manual) i.value=Math.round(budget*(1/o.odds)/k*100)/100; });
+  } else {
+    // Önerilen dağıtımı manuel olmayan kutulara yaz
+    res.stakes.forEach(s=>{ const i=document.getElementById(s.cell);
+      if(i && !i.dataset.manual) i.value=Math.round(s.stake*100)/100; });
   }
-  res.stakes.forEach(s=>{ const e=document.getElementById(s.cell); if(e){ e.textContent=fmt(s.stake)+' €'; e.className='cs'; } });
-  document.getElementById('calcTotal').textContent=fmt(res.total)+' €';
-  document.getElementById('calcNet').textContent='+'+fmt(res.net)+' €';
-  // çoklu maçta garanti yok — dürüst uyarı
-  const macSayisi=new Set(active.map(a=>a.m)).size;
-  if(macSayisi>1){
-    warn.style.display='block';
-    warn.innerHTML=`⚠️ <b>${macSayisi} ayrı maça</b> yayıldı : <b>aucun gain garanti</b>.<br>
-      Si au moins une sélection gagne → <b>+${fmt(res.net)} €</b>. Si toutes perdent → <b>−${fmt(res.total)} €</b>.`;
-  } else warn.style.display='none';
+
+  // === SONUÇ: her zaman kutulardaki GERÇEK tutarlardan hesaplanır ===
+  const gercek=active.map(a=>({...a, stake:parseFloat((document.getElementById(a.cell)||{}).value)||0}));
+  const total=gercek.reduce((s,x)=>s+x.stake,0);
+  document.getElementById('calcTotal').textContent = total>0 ? fmt(total)+' €' : '—';
+  const el=document.getElementById('calcNet');
+  if(total<=0){ el.textContent='—'; warn.style.display='none'; return; }
+  const nets=gercek.map(x=>x.stake*x.odds-total);
+  const mn=Math.min(...nets), mx=Math.max(...nets);
+  const esit=(mx-mn)<0.5;   // 2 haneye yuvarlamadan gelen kuruş farkını "eşit" say
+  el.textContent = esit ? ((mn>=0?'+':'')+fmt(mn)+' €')
+                        : ((mn>=0?'+':'')+fmt(mn)+' → '+(mx>=0?'+':'')+fmt(mx)+' €');
+  el.style.color = mn>=0 ? 'var(--green)' : '#ff8b8b';
+  const macSayisi=new Set(gercek.map(a=>a.m)).size;
+  const elle=document.querySelectorAll('.cs-in.manual').length;
+  document.getElementById('netLbl').textContent =
+    !esit ? 'Gain selon la gagnante' : (macSayisi>1 ? 'Gain si UNE seule gagne' : 'Gain net garanti');
+  let notlar=[];
+  if(macSayisi>1) notlar.push(`⚠️ <b>${macSayisi} ayrı maça</b> yayıldı : <b>aucun gain garanti</b>. Si toutes perdent → <b>−${fmt(total)} €</b>.`);
+  if(elle) notlar.push(`✏️ ${elle} mise modifiée à la main. <a href="#" onclick="resetMises();return false;" style="color:var(--accent)">↺ revenir à la suggestion</a>`);
+  if(!esit && macSayisi<=1) notlar.push(`Les gains diffèrent selon l'issue gagnante (mises non équilibrées).`);
+  if(notlar.length){ warn.style.display='block'; warn.innerHTML=notlar.join('<br>'); }
+  else warn.style.display='none';
 }
 function onObjectifInput(){ const L=getLeague(); if(L){ const t=parseFloat(document.getElementById('objectif').value); if(!isNaN(t)&&t>=0){ L.target=t; save(); } } updateCalc(); }
 
@@ -399,12 +418,14 @@ function addBet(){
   const L=getLeague(); if(!L){ alert("Ajoutez d'abord une ligue (Admin)."); return; }
   const obj=parseFloat(document.getElementById('objectif').value)||0;
   const perte=parseFloat(document.getElementById('perte').value)||0;
-  const active=readOdds(); const res=dutch(active, obj+perte);
-  if(!res||res.impossible){ alert("Renseignez au moins une cote (>1), un gain souhaité, et des cotes assez hautes."); return; }
+  // Ekrandaki GERÇEK tutarlar kaydedilir (elle değiştirdiklerin dahil)
+  const active=readOdds().map(a=>({...a, stake:parseFloat((document.getElementById(a.cell)||{}).value)||0}))
+                        .filter(a=>a.stake>0);
+  if(active.length===0){ alert("Renseignez au moins une cote et une mise (À miser)."); return; }
+  const total=active.reduce((s,x)=>s+x.stake,0);
+  const nets=active.map(x=>x.stake*x.odds-total);
   const cotes={}, stakes={};
-  active.forEach(o=>cotes[o.key]=o.odds);
-  res.stakes.forEach(s=>stakes[s.key]=Math.round(s.stake*100)/100);
-  const n=nbMatch();
+  active.forEach(o=>{ cotes[o.key]=o.odds; stakes[o.key]=Math.round(o.stake*100)/100; });
   const macAdi=m=>{
     const a=((document.getElementById('e1_'+m)||{}).value||'').trim();
     const b=((document.getElementById('e2_'+m)||{}).value||'').trim();
@@ -412,15 +433,14 @@ function addBet(){
   };
   // maç bazlı yapı: her maçın kendi seçimleri ve kendi sonucu
   const grup={};
-  res.stakes.forEach(s=>{ (grup[s.m]=grup[s.m]||[]).push({lbl:s.lbl,odds:s.odds,stake:Math.round(s.stake*100)/100}); });
+  active.forEach(s=>{ (grup[s.m]=grup[s.m]||[]).push({lbl:s.lbl,odds:s.odds,stake:Math.round(s.stake*100)/100}); });
   const legs=Object.keys(grup).map(m=>({ m:+m, name:macAdi(m), sel:grup[m], result:'pending' }));
 
   L.bets.unshift({ id:"b"+Date.now(), date:todayDate(),
     e1: legs[0] ? legs[0].name : 'Match', e2:'',
-    legs: legs.length>1 ? legs : undefined,
+    legs,
     nb: legs.length>1 ? legs.length : undefined,
-    cotes, stakes, total:res.total, P:res.net,
-    result: legs.length>1 ? undefined : 'pending' });
+    cotes, stakes, total, P:Math.round(Math.min(...nets)*100)/100 });
   document.querySelectorAll('#matchBlocks input').forEach(i=>i.value='');
   save(); render();
 }
