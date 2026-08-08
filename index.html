@@ -58,6 +58,19 @@
   .mblock input[type=text]{padding:9px;font-size:14px}
   .mblock .grid2{gap:8px}
   .mblock label.f{margin-bottom:8px;font-size:11px}
+  /* geçmişte maç bazlı satırlar */
+  .legs{margin-top:10px;display:flex;flex-direction:column;gap:7px}
+  .legrow{background:rgba(255,255,255,.03);border:1px solid var(--line);border-radius:12px;padding:9px 10px}
+  .legrow-win{border-color:rgba(34,197,94,.55);background:rgba(34,197,94,.10)}
+  .legrow-loss{border-color:rgba(239,68,68,.5);background:rgba(239,68,68,.09)}
+  .legname{font-weight:600;font-size:13px;margin-bottom:2px}
+  .legdetail{color:var(--muted);font-size:11px;margin-bottom:7px}
+  .legbtns{display:flex;gap:6px;flex-wrap:wrap}
+  .legb{flex:1;min-width:64px;background:var(--soft);border:1px solid var(--line);color:var(--muted);
+    border-radius:9px;padding:8px 6px;font-size:12px;font-weight:700;cursor:pointer}
+  .legb:hover{border-color:var(--accent);color:var(--ink)}
+  .legb.on{background:var(--green);border-color:var(--green);color:#062}
+  .legb.r.on{background:var(--red);border-color:var(--red);color:#fff}
   .hintlbl{font-size:11px;color:var(--muted);display:flex;gap:12px;margin:2px 2px 8px}
   .hintlbl .a{flex:0 0 52px;text-align:center}.hintlbl .b{flex:1}.hintlbl .c{flex:0 0 96px;text-align:right}
   .calc-row{display:flex;align-items:center;gap:12px;margin-bottom:10px}
@@ -264,8 +277,27 @@ function money(n){ return (n>0?'+':'')+fmt(n)+' €'; }
 function todayDate(){ const d=new Date(); return String(d.getDate()).padStart(2,'0')+'/'+String(d.getMonth()+1).padStart(2,'0')+'/'+String(d.getFullYear()).slice(2); }
 function getLeague(){ return data.leagues.find(l=>l.id===selLeague) || null; }
 
-function betProfit(b){ if(b.result==='win') return b.P; if(b.result==='loss') return -b.total; return 0; }
-function currentLoss(bets){ let acc=0; [...bets].reverse().forEach(b=>{ if(b.result==='loss') acc+=b.total; else if(b.result==='win') acc=0; }); return acc; }
+// çok maçlı bahis: her maçın kendi sonucu var ('pending' | 'loss' | '1/N' | 'N/N' | '2/N')
+function betStatus(b){
+  if(b.legs) return b.legs.every(l=>l.result!=='pending') ? 'settled' : 'pending';
+  return b.result==='pending' ? 'pending' : 'settled';
+}
+function betProfit(b){
+  if(b.legs){
+    if(betStatus(b)!=='settled') return 0;
+    let ret=0;
+    b.legs.forEach(l=>{ const w=l.sel.find(s=>s.lbl===l.result); if(w) ret+=w.stake*w.odds; });
+    return ret - b.total;
+  }
+  if(b.result==='win') return b.P; if(b.result==='loss') return -b.total; return 0;
+}
+function setLeg(betId,idx,val){
+  const L=getLeague(); if(!L) return;
+  const b=L.bets.find(x=>x.id===betId); if(!b||!b.legs||!b.legs[idx]) return;
+  b.legs[idx].result = (b.legs[idx].result===val) ? 'pending' : val;
+  save(); render();
+}
+function currentLoss(bets){ let acc=0; [...bets].reverse().forEach(b=>{ if(betStatus(b)==='pending')return; const p=betProfit(b); if(p<0) acc+=-p; else if(p>0) acc=0; }); return acc; }
 
 // ---- BLOCS DE MATCHS (1 à 5 matchs simultanés) ----
 function nbMatch(){ return parseInt(document.getElementById('nbMatch').value)||1; }
@@ -373,17 +405,22 @@ function addBet(){
   active.forEach(o=>cotes[o.key]=o.odds);
   res.stakes.forEach(s=>stakes[s.key]=Math.round(s.stake*100)/100);
   const n=nbMatch();
-  const macAdlari=[];
-  for(let m=1;m<=n;m++){
-    const a=(document.getElementById('e1_'+m)||{}).value||'', b=(document.getElementById('e2_'+m)||{}).value||'';
-    if(a.trim()||b.trim()) macAdlari.push((a.trim()||'Match')+(b.trim()?' – '+b.trim():''));
-  }
-  const kacMac=new Set(active.map(o=>o.m)).size;
+  const macAdi=m=>{
+    const a=((document.getElementById('e1_'+m)||{}).value||'').trim();
+    const b=((document.getElementById('e2_'+m)||{}).value||'').trim();
+    return (a||('Match '+m))+(b?' – '+b:'');
+  };
+  // maç bazlı yapı: her maçın kendi seçimleri ve kendi sonucu
+  const grup={};
+  res.stakes.forEach(s=>{ (grup[s.m]=grup[s.m]||[]).push({lbl:s.lbl,odds:s.odds,stake:Math.round(s.stake*100)/100}); });
+  const legs=Object.keys(grup).map(m=>({ m:+m, name:macAdi(m), sel:grup[m], result:'pending' }));
+
   L.bets.unshift({ id:"b"+Date.now(), date:todayDate(),
-    e1: macAdlari[0] || 'Match', e2:'',
-    matchs: macAdlari.length>1 ? macAdlari : undefined,
-    nb: kacMac>1 ? kacMac : undefined,
-    cotes, stakes, total:res.total, P:res.net, result:'pending' });
+    e1: legs[0] ? legs[0].name : 'Match', e2:'',
+    legs: legs.length>1 ? legs : undefined,
+    nb: legs.length>1 ? legs.length : undefined,
+    cotes, stakes, total:res.total, P:res.net,
+    result: legs.length>1 ? undefined : 'pending' });
   document.querySelectorAll('#matchBlocks input').forEach(i=>i.value='');
   save(); render();
 }
@@ -416,7 +453,7 @@ function clearLeague(){ openPin({type:'clearLeague'}); }
 function render(){
   const bar=document.getElementById('leaguesBar');
   bar.innerHTML = data.leagues.map(l=>{
-    const st=l.bets.filter(b=>b.result!=='pending');
+    const st=l.bets.filter(b=>betStatus(b)!=='pending');
     const net=st.reduce((s,b)=>s+betProfit(b),0);
     const cls=net>0?'pos':(net<0?'neg':'');
     return `<div class="pill ${l.id===selLeague?'active':''}" onclick="selectLeague('${l.id}')"><span class="pn">${l.name}</span><span class="pnet ${cls}">${money(net)}</span></div>`;
@@ -431,9 +468,9 @@ function render(){
     document.getElementById('betList').innerHTML='<div class="empty">Aucune ligue. Ouvrez l\'Admin pour en ajouter.</div>';
     document.getElementById('objectif').value=''; document.getElementById('perte').value=''; updateCalc(); renderLeaguesAdmin(); return;
   }
-  const settled=L.bets.filter(b=>b.result!=='pending');
+  const settled=L.bets.filter(b=>betStatus(b)!=='pending');
   const net=settled.reduce((s,b)=>s+betProfit(b),0);
-  const wins=settled.filter(b=>b.result==='win').length;
+  const wins=settled.filter(b=>betProfit(b)>0).length;
   const loss=currentLoss(L.bets);
   document.getElementById('jeuTitle').textContent=L.name;
   np.textContent=money(net); np.className='bval big '+(net>=0?'pos':'neg');
@@ -447,21 +484,43 @@ function render(){
   const list=document.getElementById('betList');
   if(L.bets.length===0){ list.innerHTML='<div class="empty">Aucun pari.</div>'; }
   else list.innerHTML=L.bets.map(b=>{
-    const p=betProfit(b); let amtHtml,tag;
-    if(b.result==='pending'){ amtHtml=`<span class="amt wait">+${fmt(b.P)} €</span>`; tag='<span class="tag pending">En attente</span>'; }
-    else if(b.result==='win'){ amtHtml=`<span class="amt pos">${money(p)}</span>`; tag='<span class="tag win">Gagné</span>'; }
+    const p=betProfit(b), st=betStatus(b); let amtHtml,tag,body;
+    if(st==='pending'){ amtHtml=`<span class="amt wait">+${fmt(b.P)} €</span>`; tag='<span class="tag pending">En attente</span>'; }
+    else if(p>=0){ amtHtml=`<span class="amt pos">${money(p)}</span>`; tag='<span class="tag win">Gagné</span>'; }
     else { amtHtml=`<span class="amt neg">${money(p)}</span>`; tag='<span class="tag loss">Perdu</span>'; }
-    const parts=Object.keys(b.stakes).map(k=>`<b>${k}</b> ${fmt(b.stakes[k])}€ <span style="color:#b9c0cd">(${fmt(b.cotes[k])})</span>`).join(' · ');
-    return `<li class="bet ${b.result}">
-      <div class="row1">
-        <div style="min-width:0"><div class="match">${b.nb?`<span style="background:var(--accent);color:#fff;font-size:10px;font-weight:800;border-radius:20px;padding:2px 8px;margin-right:6px">${b.nb} MATCHS</span>`:''}${b.matchs?b.matchs.join(' · '):(b.e1+(b.e2?' <span style="color:var(--muted)">–</span> '+b.e2:''))}</div>
-          <div class="meta">${b.date} · mise totale ${fmt(b.total)}€<br>${parts}</div></div>
-        <div style="text-align:right">${tag}<br>${amtHtml}</div>
-      </div>
+
+    if(b.legs){
+      // her maç ayrı satır, kendi Gagné/Perdu düğmeleriyle
+      body = b.legs.map((l,i)=>{
+        const secler = l.sel.map(s=>{
+          const on = l.result===s.lbl;
+          return `<button class="legb ${on?'on':''}" onclick="setLeg('${b.id}',${i},'${s.lbl}')">${on?'✓ ':''}${s.lbl}</button>`;
+        }).join('');
+        const perdu = l.result==='loss';
+        const detay = l.sel.map(s=>`${s.lbl} ${fmt(s.stake)}€ <span style="color:#b9c0cd">(${fmt(s.odds)})</span>`).join(' · ');
+        const cls = l.result==='pending' ? '' : (l.result==='loss' ? 'legrow-loss' : 'legrow-win');
+        return `<div class="legrow ${cls}">
+          <div class="legname">${l.name}</div>
+          <div class="legdetail">${detay}</div>
+          <div class="legbtns">${secler}<button class="legb r ${perdu?'on':''}" onclick="setLeg('${b.id}',${i},'loss')">${perdu?'✓ ':''}Perdu</button></div>
+        </div>`;
+      }).join('');
+      body = `<div class="legs">${body}</div>`;
+    } else {
+      const parts=Object.keys(b.stakes).map(k=>`<b>${k}</b> ${fmt(b.stakes[k])}€ <span style="color:#b9c0cd">(${fmt(b.cotes[k])})</span>`).join(' · ');
+      body=`<div class="meta">${parts}</div>
       <div class="actions">
         <button class="btn-green" onclick="setResult('${b.id}','win')">${b.result==='win'?'✓ Gagné':'Gagné'}</button>
         <button class="btn-red" onclick="setResult('${b.id}','loss')">${b.result==='loss'?'✓ Perdu':'Perdu'}</button>
+      </div>`;
+    }
+    return `<li class="bet ${st==='pending'?'pending':(p>=0?'win':'loss')}">
+      <div class="row1">
+        <div style="min-width:0"><div class="match">${b.nb?`<span style="background:var(--accent);color:#fff;font-size:10px;font-weight:800;border-radius:20px;padding:2px 8px;margin-right:6px">${b.nb} MATCHS</span>`:''}${b.legs?'':(b.e1+(b.e2?' <span style="color:var(--muted)">–</span> '+b.e2:''))}</div>
+          <div class="meta">${b.date} · mise totale ${fmt(b.total)}€</div></div>
+        <div style="text-align:right">${tag}<br>${amtHtml}</div>
       </div>
+      ${body}
       <div style="text-align:right;margin-top:6px"><button class="del" onclick="askDelete('${b.id}')">🗑️ supprimer</button></div>
     </li>`;
   }).join('');
